@@ -12,7 +12,7 @@ v2g = 0
 # 创建空的DataFrame，用于存储结果
 cost_df = pd.DataFrame(columns=EV_penetration_values)
 lose_df = pd.DataFrame(columns=EV_penetration_values)
-earn_df = pd.DataFrame( columns=EV_penetration_values)
+earn_df = pd.DataFrame(columns=EV_penetration_values)
 
 # 创建存储CSV的目录
 data1_dir = 'data_noorder'
@@ -22,7 +22,7 @@ os.makedirs(data1_dir, exist_ok=True)
 total_iterations = len(EV_penetration_values)
 with tqdm(total=total_iterations, desc="Processing", unit="iteration") as pbar:
     for ev_p in EV_penetration_values:
-        cost, lose = main(ev_p, v2g)  # 实际的main函数调用
+        cost, lose = main(ev_p, v2g, data1_dir)  # 实际的main函数调用
         cost_df.at[ev_p] = cost
         lose_df.at[ev_p] = lose
 

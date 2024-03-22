@@ -1,5 +1,4 @@
-from gridinfo import (branch, bus, gen, pv_capacity_dict, wt_capacity_dict, nodedata_dict,
-                      pvwt_reactive, reverse_node_mapping, charge_ratio)
+from gridinfo import (branch, bus, gen, reverse_node_mapping, charge_ratio)
 import warnings
 #from data_output import EV_penetration, v2g_ratio
 import numpy as np
@@ -7,16 +6,19 @@ import pandas as pd
 import os
 import pandapower as pp
 import pandapower.timeseries as ts
+# 忽略特定库的警告
+warnings.filterwarnings("ignore")
 
 class OPF:
-    def __init__(self, node_EV_load):
+    def __init__(self, node_EV_load, nodedata_dict, re_capacity_dict):
         self.net = pp.create_empty_network()
         self.node_EV_load = node_EV_load
-        self.gen_cost = {101: (3, 20, 0),
-                    201: (3, 20, 0),
-                    301: (3, 20, 0),
-                    401: (3, 20, 0)}
-
+        self.gen_cost = {101: (0.01199, 37.5510, 117.7551),
+                    201: (0.02801, 25.8027, 24.6382),
+                    301: (0.02801, 25.8027, 24.6382),
+                    401: (0.02801, 25.8027, 24.6382)}
+        self.nodedata_dict = nodedata_dict
+        self.re_capacity_dict = re_capacity_dict
     def build_network(self):
         # 添加母线
         for idx, row in enumerate(bus['bus_i']):
@@ -43,7 +45,7 @@ class OPF:
         # bus_index_101是编号为101的母线在pandapower网络中的索引
         bus_index_101 = self.net.bus.index[self.net.bus.name == '101'].item()
         # 创建外部电网并连接到母线101，同时设置为slack母线
-        pp.create_ext_grid(self.net, bus=bus_index_101, vm_pu=1.02, va_degree=0, slack=True)
+        pp.create_ext_grid(self.net, bus=bus_index_101, vm_pu=1.00, va_degree=0, slack=True)
 
     def add_branches(self):
         for idx, row in enumerate(branch['fbus']):
@@ -89,14 +91,14 @@ class OPF:
                                 cp0_eur=cost_params[2])  # c参数
 
     # 添加可再生能源和负荷
-    def add_loads_and_sgen_for_each_period(self, i):
-        period = int(i / 2)  # 48转24h对应
+    def add_loads_and_sgen_for_each_period(self, period):
+        #period = int(i / 2)  # 48转24h对应
         # 清除先前的负荷和分布式发电
         self.net.load.drop(self.net.load.index, inplace=True)
         self.net.sgen.drop(self.net.sgen.index, inplace=True)
 
         # 获取当前时段的所有节点负荷
-        loads_for_period = self.node_EV_load[i]  # This should be a vector of length 40
+        loads_for_period = self.node_EV_load[period]  # This should be a vector of length 40
 
         # 添加每个节点的电动汽车负荷
         for node_index, load_kw in enumerate(loads_for_period):
@@ -108,41 +110,36 @@ class OPF:
             pp.create_load(self.net, bus=bus_index, p_mw=load_kw / 1000.0)  # kW to MW
 
         # 添加风光发电的有功功率
-        for node_name, p_mw in pv_capacity_dict.get(period, []):
-            bus_index = self.net.bus.index[self.net.bus.name == str(node_name)].item()
-            pp.create_sgen(self.net, bus=bus_index, p_mw=p_mw / 1000.0)  # kW to MW
-
-        for node_name, p_mw in wt_capacity_dict.get(period, []):
-            bus_index = self.net.bus.index[self.net.bus.name == str(node_name)].item()
+        for node_name, p_mw in self.re_capacity_dict.get(period, []):
+            bus_index = self.net.bus.index[self.net.bus.name == str(int(node_name))].item()
             pp.create_sgen(self.net, bus=bus_index, p_mw=p_mw / 1000.0)  # kW to MW
 
         # 添加常规负荷的有功和无功功率
-        for node_name, p_mw, q_mvar in nodedata_dict.get(period, []):
+        for node_name, p_mw, q_mvar in self.nodedata_dict.get(period, []):
             node_name = int(node_name)
-            bus_index = self.net.bus.index[self.net.bus.name == str(node_name)].item()
+            bus_index = self.net.bus.index[self.net.bus.name == str(int(node_name))].item()
             pp.create_load(self.net, bus=bus_index, p_mw=p_mw / 1000.0,
                            q_mvar=q_mvar / 1000.0)  # kW to MW, kVAR to MVAR
 
-    def add_pv_wt_with_q_compensation(self):
-        # 遍历pvwt_reactive字典中的'pvwt_bus'数组
-        for idx, bus in enumerate(pvwt_reactive['pvwt_bus']):
-            # 获取无功功率上下限
-            q_max = pvwt_reactive['Qmax'][idx] / 1000.0  # 转换为MVAR
-            q_min = pvwt_reactive['Qmin'][idx] / 1000.0  # 转换为MVAR
+    # def add_pv_wt_with_q_compensation(self):
+    #     # 遍历pvwt_reactive字典中的'pvwt_bus'数组
+    #     for idx, bus in enumerate(pvwt_reactive['pvwt_bus']):
+    #         # 获取无功功率上下限
+    #         q_max = pvwt_reactive['Qmax'][idx] / 1000.0  # 转换为MVAR
+    #         q_min = pvwt_reactive['Qmin'][idx] / 1000.0  # 转换为MVAR
+    #
+    #         # 在pandapower网络中查找对应的母线索引
+    #         bus_index = self.net.bus.index[self.net.bus.name == str(bus)].item()
+    #
+    #         # 创建无功发生器
+    #         pp.create_sgen(self.net, bus=bus_index, p_mw=0,
+    #                        q_mvar=0,  # 初始无功功率设置为0
+    #                        min_q_mvar=q_min,
+    #                        max_q_mvar=q_max,
+    #                        name=f"PV_WT_{bus}")
 
-            # 在pandapower网络中查找对应的母线索引
-            bus_index = self.net.bus.index[self.net.bus.name == str(bus)].item()
+    def run_ts_opf(self, EV_penetration, v2g_ratio, file_path):
 
-            # 创建无功发生器
-            pp.create_sgen(self.net, bus=bus_index, p_mw=0,
-                           q_mvar=0,  # 初始无功功率设置为0
-                           min_q_mvar=q_min,
-                           max_q_mvar=q_max,
-                           name=f"PV_WT_{bus}")
-
-    def run_ts_opf(self, EV_penetration, v2g_ratio):
-        # 忽略特定库的警告
-        warnings.filterwarnings('ignore', category=UserWarning, module='pandapower')
         self.build_network()
         self.add_branches()
         self.add_generator_costs()
@@ -150,9 +147,10 @@ class OPF:
         generator_costs = []  # 存储每个发电机的成本
         system_losses = []  # 存储每个步长的网损
         import_powers = []  # 存储每个步长从输电网进口的电量
+        gen_powers = []
 
         # 定义文件保存路径
-        base_path = os.path.join('data2', str(EV_penetration), str(v2g_ratio))
+        base_path = os.path.join(file_path, str(EV_penetration), str(v2g_ratio))
         if not os.path.exists(base_path):
             os.makedirs(base_path)  # 如果路径不存在，创建对应的文件夹
 
@@ -162,11 +160,10 @@ class OPF:
         # 对于每个半小时的时间段执行OPF
         for period in range(48):
             self.add_loads_and_sgen_for_each_period(period)
-            self.add_pv_wt_with_q_compensation()
-
+            # self.add_pv_wt_with_q_compensation()
             self.net.line["max_loading_percent"] = 90  # 载流量约束
 
-            pp.runopp(self.net, verbose=False)  # 执行最优潮流计算
+            pp.runopp(self.net, verbose=True)  # 执行最优潮流计算
 
             # 将当前时段的电压向量添加到DataFrame中
             current_voltage_vector = self.net.res_bus[['vm_pu']].rename(columns={'vm_pu': f'period_{period}'})
@@ -184,11 +181,15 @@ class OPF:
             import_power = sum(self.net.res_ext_grid.p_mw)  # 直接从res_ext_grid获取外部电网注入的有功功率
             import_powers.append(import_power)
 
+            # 计算发电的电量
+            total_gen_power = sum(self.net.res_gen.p_mw)
+            gen_powers.append(total_gen_power)
+
         # 所有时段处理完成后，保存电压分布到单个CSV文件
         voltage_distribution_file = os.path.join(base_path, 'voltage_distribution.csv')
         voltage_distributions.to_csv(voltage_distribution_file, index=False)
 
-        return generator_costs, system_losses, import_powers
+        return generator_costs, system_losses, import_powers, gen_powers
 
     def calculate_generator_costs(self):
         gen_costs = []

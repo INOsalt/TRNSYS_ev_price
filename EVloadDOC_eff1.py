@@ -15,7 +15,7 @@ class EVChargingOptimizer:
         self.N_SLOTS = 48  # 一天中的时间段数量
         self.P_slow = 7 # kW
         self.P_quick = 42 # kW
-        self.efficiency = 0.9
+        self.efficiency = 1
 
     def optimizeCommunityChargingPattern(self, community_vehicles_distribution, community_arriving_vehicles,
                                          community_leaving_vehicles, community_P_BASIC, not_charging_distribution,
@@ -663,7 +663,7 @@ def P_basic_and_EV(P_basic_dict, work_slow_charging_distribution, home_charging_
     N_SLOTS = 48  # 一天中的时间段数量
     P_slow = 7  # kW
     P_quick = 42  # kW
-    efficiency = 0.9
+    efficiency = 1
     # 初始化存储每个节点包括EV负载后的总负载的字典
     node_P_basic_and_EV = {}
 

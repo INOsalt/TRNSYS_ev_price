@@ -1,4 +1,5 @@
-from EVloadDOC import EVload
+#from EVloadDOC import EVload
+from EVloadDOC_eff1 import EVload
 from EV_cost import EV_earn
 from gridinfo import expand_array, prices_real, C_tran
 #from data_output import
@@ -27,14 +28,16 @@ EV_3_expanded = expand_array(EV_3)
 EV_4_expanded = expand_array(EV_4)
 
 
-def main(ev_p, v2g):
+def main(ev_p, v2g, file_path, nodedata_dict, re_capacity_dict):
+
     node_EV_load, mic_EV_load, node_P_total, node_P_basic_and_EV, mic_EV_load_quick, node_slack_load, P_basic_dict\
-        = EVload(EV_Q1, EV_S1, EV_2, EV_3, EV_4, ev_p, v2g)
+        = EVload(EV_Q1, EV_S1, EV_2, EV_3, EV_4, ev_p, v2g, file_path, nodedata_dict, re_capacity_dict)
     total_earn = EV_earn(mic_EV_load, mic_EV_load_quick, P_basic_dict,
                          EV_Q1_expanded, EV_S1_expanded, EV_2_expanded, EV_3_expanded, EV_4_expanded)
-    opf = OPF(node_EV_load)
-    generator_costs, system_losses, import_powers = opf.run_ts_opf(ev_p, v2g)
-    cost_import = np.sum(np.array(import_powers) * C_tran)
+    opf = OPF(node_EV_load, nodedata_dict, re_capacity_dict)
+
+    generator_costs, system_losses, import_powers, gen_powers = opf.run_ts_opf(ev_p, v2g, file_path)
+    cost_import = np.sum(np.array(import_powers) * 0.5 * 1000 * C_tran) # 0.5h MW
 
     # 将 generator_costs 转换为 DataFrame
     generator_all_data = []
@@ -47,9 +50,11 @@ def main(ev_p, v2g):
 
     cost = cost_import + cost_gen * 7.2 - total_earn # 买电成本+发电成本-收费 #美元汇率7.2
     lose = np.sum(np.array(system_losses))
+    total_import = np.sum(np.array(import_powers))
+    total_gen = np.sum(np.array(gen_powers))
 
     # 定义文件保存路径
-    output_dir = os.path.join('data2', str(ev_p), str(v2g))
+    output_dir = os.path.join(file_path, str(ev_p), str(v2g))
     os.makedirs(output_dir, exist_ok=True)  # 确保目标文件夹存在
 
     # 定义一个辅助函数用于将数据保存到CSV文件
@@ -84,6 +89,6 @@ def main(ev_p, v2g):
     save_to_csv(cost, 'cost')
     save_to_csv(lose, 'lose')
 
-    return cost, lose, total_earn
+    return cost, lose, total_earn, total_import, total_gen
 
 #main()

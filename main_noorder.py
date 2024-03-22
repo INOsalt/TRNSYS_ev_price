@@ -27,10 +27,10 @@ EV_3_expanded = expand_array(EV_3)
 EV_4_expanded = expand_array(EV_4)
 
 
-def main(ev_p, v2g):
-    node_P_EV = EVload(EV_Q1, EV_S1, EV_2, EV_3, EV_4, ev_p, v2g)
+def main(ev_p, v2g, file_path):
+    node_P_EV = EVload(EV_Q1, EV_S1, EV_2, EV_3, EV_4, ev_p, v2g, file_path)
     opf = OPF(node_P_EV)
-    generator_costs, system_losses, import_powers = opf.run_ts_opf(ev_p, v2g)
+    generator_costs, system_losses, import_powers = opf.run_ts_opf(ev_p, v2g, file_path)
     cost_import = np.sum(np.array(import_powers) * C_tran)
 
     # 将 generator_costs 转换为 DataFrame
@@ -46,7 +46,7 @@ def main(ev_p, v2g):
     lose = np.sum(np.array(system_losses))
 
     # 定义文件保存路径
-    output_dir = os.path.join('data_nooreder', str(ev_p))
+    output_dir = os.path.join(file_path, str(ev_p))
     os.makedirs(output_dir, exist_ok=True)  # 确保目标文件夹存在
 
     # 定义一个辅助函数用于将数据保存到CSV文件

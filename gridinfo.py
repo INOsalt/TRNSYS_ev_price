@@ -95,64 +95,26 @@ bus_df = pd.read_csv('grid/bus_data.csv')
 # 将bus_df转换为字典，其中每个值都是NumPy数组
 bus = {col: bus_df[col].values for col in bus_df.columns}
 
-gen_df = pd.read_csv('grid/gen_data.csv')
+gen_df = pd.read_csv('grid/gen_data_large.csv')
 # 将gen_df转换为字典，其中每个值都是NumPy数组
 gen = {col: gen_df[col].values for col in gen_df.columns}
 
-pvwt_reactive_df = pd.read_csv('grid/pvwt_reactive.csv')
-pvwt_reactive = {col: pvwt_reactive_df[col].values for col in pvwt_reactive_df.columns}
+# pvwt_reactive_df = pd.read_csv('grid/pvwt_reactive.csv')
+# pvwt_reactive = {col: pvwt_reactive_df[col].values for col in pvwt_reactive_df.columns}
+#
+# # 节点负荷矩阵# %Nodedata=[Bus ID	kW  KVAR ]
+# # 读取基础负荷数据
+# base_load_df = pd.read_csv('grid/base_load.csv')
+# base_load_data = base_load_df.to_numpy()
+# # 读取负荷百分比数据
+# load_percent_df = pd.read_csv('grid/load_percent.csv')
+# load_percent_data = load_percent_df[['hour', 'Wkdy']].to_numpy()
 
-# 节点负荷矩阵# %Nodedata=[Bus ID	kW  KVAR ]
-# 读取基础负荷数据
-base_load_df = pd.read_csv('grid/base_load.csv')
-base_load_data = base_load_df.to_numpy()
-# 读取负荷百分比数据
-load_percent_df = pd.read_csv('grid/load_percent.csv')
-load_percent_data = load_percent_df[['hour', 'Wkdy']].to_numpy()
-
-# 创建一个字典来存储每小时的节点负荷矩阵
-
-nodedata_dict = {}
-for hour, percent in load_percent_data:
-    # 对于每个小时，先将负荷数据转换为浮点数，然后计算基础负荷乘以对应小时的负荷百分比
-    adjusted_load = base_load_data.astype(float)  # 将整个数组转换为浮点数
-    adjusted_load[:, 1] *= percent/100  # 调整kW
-    adjusted_load[:, 2] *= percent/100  # 调整KVAR
-    # 将调整后的负荷矩阵存储到字典中，使用小时作为键
-    nodedata_dict[int(hour)] = adjusted_load
-    # 将调整后的负荷矩阵存储到字典中，使用小时作为键
-    nodedata_dict[int(hour)] = adjusted_load
-
-
-# PV WT发电 Bus ID	PG	QGmin 	QGmax
-# 读取PV数据
-pv_df = pd.read_csv('grid/PV.csv')
-pv_data = pv_df[['Bus ID', 'PG']].to_numpy()
-# 读取WT发电单元数据
-wt_df = pd.read_csv('grid/WT.csv')
-wt_data = wt_df[['Bus ID', 'PG']].to_numpy()
-# 读取每小时可用的可再生能源百分比数据
-available_re_df = pd.read_csv('grid/available_re.csv')
-available_re_data = available_re_df[['hour', 'PV', 'WT']].to_numpy()
-# 创建两个字典分别存储每小时的PV和WT发电能力向量
-pv_capacity_dict = {}
-wt_capacity_dict = {}
-for hour, pv_percent, wt_percent in available_re_data:
-    # 计算每小时的PV发电能力
-    pv_capacity = pv_data.copy()
-    pv_capacity[:, 1] = pv_capacity[:, 1] * pv_percent / 100
-    pv_capacity_dict[int(hour)] = pv_capacity
-
-    # 计算每小时的WT发电能力
-    wt_capacity = wt_data.copy()
-    wt_capacity[:, 1] = wt_capacity[:, 1] * wt_percent / 100
-    wt_capacity_dict[int(hour)] = wt_capacity
-
-#=========处理微电网相关数据======================
-# 初始化两个字典，用于存储每个微电网的PV和WT发电量向量
-microgrid_pv = {0: np.zeros(24), 1: np.zeros(24), 2: np.zeros(24), 3: np.zeros(24)}
-microgrid_wt = {0: np.zeros(24), 1: np.zeros(24), 2: np.zeros(24), 3: np.zeros(24)}
-
+# #=========处理微电网相关数据======================
+# # 初始化两个字典，用于存储每个微电网的PV和WT发电量向量
+# microgrid_pv = {0: np.zeros(24), 1: np.zeros(24), 2: np.zeros(24), 3: np.zeros(24)}
+# microgrid_wt = {0: np.zeros(24), 1: np.zeros(24), 2: np.zeros(24), 3: np.zeros(24)}
+#
 # 定义一个函数，用于确定Bus ID属于哪个微电网
 def microgrid_id(bus_id):
     if 100 <= bus_id < 200:
@@ -163,30 +125,30 @@ def microgrid_id(bus_id):
         return 2
     elif 400 <= bus_id < 500:
         return 3
-
-# 遍历每个小时，更新微电网的PV和WT发电量
-for hour in range(24):
-    # 处理PV发电能力
-    for bus_id, pg in pv_capacity_dict[hour]:
-        mg_id = microgrid_id(bus_id)
-        microgrid_pv[mg_id][hour] += pg
-
-    # 处理WT发电能力
-    for bus_id, pg in wt_capacity_dict[hour]:
-        mg_id = microgrid_id(bus_id)
-        microgrid_wt[mg_id][hour] += pg
-
-# 初始化一个字典来存储每个微电网每小时的总负荷
-microgrid_load_dict = {0: np.zeros(24), 1: np.zeros(24), 2: np.zeros(24), 3: np.zeros(24)}
-
-# 遍历nodedata_dict中的每小时节点负荷矩阵
-for hour, loads in nodedata_dict.items():
-    # 遍历该小时每个节点的负荷数据
-    for load in loads:
-        bus_id, kW, _ = load  # 假设负荷矩阵中的列分别是Bus ID、kW、KVAR
-        mg_id = microgrid_id(int(bus_id))  # 使用不同的变量名来存储函数返回值
-        if mg_id:  # 检查mg_id是否有效（不是None）
-            microgrid_load_dict[mg_id][hour] += kW  # 累加对应微电网的kW负荷 # 累加对应微电网的kW负荷
+#
+# # 遍历每个小时，更新微电网的PV和WT发电量
+# for hour in range(24):
+#     # 处理PV发电能力
+#     for bus_id, pg in pv_capacity_dict[hour]:
+#         mg_id = microgrid_id(bus_id)
+#         microgrid_pv[mg_id][hour] += pg
+#
+#     # 处理WT发电能力
+#     for bus_id, pg in wt_capacity_dict[hour]:
+#         mg_id = microgrid_id(bus_id)
+#         microgrid_wt[mg_id][hour] += pg
+#
+# # 初始化一个字典来存储每个微电网每小时的总负荷
+# microgrid_load_dict = {0: np.zeros(24), 1: np.zeros(24), 2: np.zeros(24), 3: np.zeros(24)}
+#
+# # 遍历nodedata_dict中的每小时节点负荷矩阵
+# for hour, loads in nodedata_dict.items():
+#     # 遍历该小时每个节点的负荷数据
+#     for load in loads:
+#         bus_id, kW, _ = load  # 假设负荷矩阵中的列分别是Bus ID、kW、KVAR
+#         mg_id = microgrid_id(int(bus_id))  # 使用不同的变量名来存储函数返回值
+#         if mg_id:  # 检查mg_id是否有效（不是None）
+#             microgrid_load_dict[mg_id][hour] += kW  # 累加对应微电网的kW负荷 # 累加对应微电网的kW负荷
 
 # #=========映射处理=========
 # branch['fbus'] = np.array([node_mapping[node] for node in branch['fbus']])

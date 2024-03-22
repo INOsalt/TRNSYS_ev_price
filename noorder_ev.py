@@ -2,8 +2,7 @@ from docplex.mp.model import Model
 from docplex.mp.conflict_refiner import ConflictRefiner
 import numpy as np
 from charging_choice import ChargingManager
-from gridinfo import (end_points, nodes, node_mapping, reverse_node_mapping, transition_matrices, nodedata_dict,
-                      pv_capacity_dict, wt_capacity_dict, prices_real )
+from gridinfo import (end_points, nodes, node_mapping, reverse_node_mapping, transition_matrices, prices_real )
 #from runner import EV_penetration, v2g_ratio
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -201,7 +200,7 @@ def save_dict_to_csv(base_path, data_dict, filename):
     # 保存到CSV
     df.to_csv(os.path.join(base_path, f'{filename}.csv'), index=False)
 
-def EVload(EV_Q1, EV_S1, EV_2, EV_3, EV_4,EV_penetration,v2g_ratio):
+def EVload(EV_Q1, EV_S1, EV_2, EV_3, EV_4,EV_penetration,v2g_ratio,file_path):
 
     # 充电选择实例
     EV_choice = ChargingManager(EV_Q1, EV_S1, EV_2, EV_3, EV_4,EV_penetration,v2g_ratio)
@@ -229,7 +228,7 @@ def EVload(EV_Q1, EV_S1, EV_2, EV_3, EV_4,EV_penetration,v2g_ratio):
                                         in charging_distribution_work_quick.items()}
 
     # 定义一个辅助函数用于保存字典到CSV
-    base_path = os.path.join('data_noorder', str(EV_penetration), str(v2g_ratio))
+    base_path = os.path.join(file_path, str(EV_penetration), str(v2g_ratio))
     if not os.path.exists(base_path):
         os.makedirs(base_path)
 

@@ -3,7 +3,7 @@ from docplex.mp.conflict_refiner import ConflictRefiner
 from tqdm import tqdm
 import numpy as np
 from charging_choice import ChargingManager
-from gridinfo import (end_points, nodes, node_mapping, reverse_node_mapping, transition_matrices, prices_real)
+from gridinfo import (end_points, nodes, node_mapping, reverse_node_mapping, transition_matrices, prices_real )
 import matplotlib.pyplot as plt
 import pandas as pd
 import os
@@ -105,17 +105,15 @@ class EVChargingOptimizer:
         model.add_constraints(constraints)
 
         # 计算每个时段的电网总负载，包括基本负载、充电增加和放电减少
+        penalty_v2g = 0.9  # v2g惩罚权重，尽量小
         P_total = [community_P_BASIC[t] +
-                   ((charge[t] + v2g_charge1[t]) * self.P_slow * self.DELTA_T / self.efficiency) -
-                   ((discharge[t] + v2g_discharge1[t]) * self.P_slow * self.DELTA_T * self.efficiency)
+                   ((charge[t] + penalty_v2g * v2g_charge1[t]) * self.P_slow * self.DELTA_T / self.efficiency) -
+                   ((discharge[t] + penalty_v2g * v2g_discharge1[t]) * self.P_slow * self.DELTA_T * self.efficiency)
                    for t in range(self.N_SLOTS)]
 
         # 在目标函数中加入惩罚项，惩罚未满足的紧急充电需求
         penalty_weight = 1000  # slack惩罚权重，尽量为0
-        penalty_v2g = 0.01  # v2g惩罚权重，尽量小
-        penalty_term = (model.sum(slack_EV[t] * penalty_weight for t in range(self.N_SLOTS))
-                        + model.sum(v2g_charge1[t] * penalty_v2g for t in range(self.N_SLOTS))
-                        + model.sum(v2g_discharge1[t] * penalty_v2g for t in range(self.N_SLOTS)))
+        penalty_term = model.sum(slack_EV[t] * penalty_weight for t in range(self.N_SLOTS))
 
         # 目标函数：最小化电网负载的高峰与低谷之间的差异
         model.minimize(model.max(P_total) - model.min(P_total) + penalty_term)
@@ -151,9 +149,9 @@ class EVChargingOptimizer:
                 v2g_discharging_power = solution.get_value(v2g_discharge1[t]) * self.P_slow * self.efficiency
                 # 计算slack总和
                 slack_power = solution.get_value(slack_EV[t]) / self.efficiency
-                # 计算EV净功率：充电功率 - 放电功率 没有V2G
-                ev_power = charging_power - discharging_power
-                net_power = charging_power - discharging_power + v2g_charging_power- v2g_discharging_power
+                # 计算EV车主的收益的负荷
+                ev_power = solution.get_value(charge[t]) * self.P_slow - solution.get_value(discharge[t]) * self.P_slow
+                net_power = charging_power - discharging_power + v2g_charging_power - v2g_discharging_power
                 net_power_per_half_hour.append(net_power)
                 ev_vector.append(ev_power)
 
@@ -263,15 +261,13 @@ class EVChargingOptimizer:
         # 目标函数
         # 在目标函数中加入惩罚项，惩罚未满足的紧急充电需求
         penalty_weight = 1000  # 惩罚权重，根据问题规模和重要性调整
-        penalty_v2g = 0.01  # v2g惩罚权重，尽量小
-        penalty_term = (model.sum(slack_EV_work[t] * penalty_weight for t in range(self.N_SLOTS))
-                        + model.sum(v2g_charge[t] * penalty_v2g for t in range(self.N_SLOTS))
-                        + model.sum(v2g_discharge[t] * penalty_v2g for t in range(self.N_SLOTS)))
+        penalty_v2g = 0.9  # v2g惩罚权重，尽量小
+        penalty_term = model.sum(slack_EV_work[t] * penalty_weight for t in range(self.N_SLOTS))
 
         # 计算每个时段的电网总负载，考虑慢充充电、慢充放电和快充充电
         P_total = [office_P_BASIC[t] +
-                   ((slow_charge[t] + v2g_charge) * self.P_slow * self.DELTA_T / self.efficiency
-                    - (slow_discharge[t] + v2g_discharge) * self.P_slow * self.DELTA_T * self.efficiency) +
+                   ((slow_charge[t] + v2g_charge * penalty_v2g) * self.P_slow * self.DELTA_T / self.efficiency
+                    - (slow_discharge[t] + v2g_discharge * penalty_v2g) * self.P_slow * self.DELTA_T * self.efficiency) +
                    fast_vehicles_distribution[t] * self.P_quick * self.DELTA_T / self.efficiency
                    for t in range(self.N_SLOTS)]
 
@@ -307,7 +303,7 @@ class EVChargingOptimizer:
                 # 计算EV净功率：充电功率 - 放电功率 # 没有v2g
                 net_power = (charging_power - discharging_power + v2g_charging_power - v2g_discharging_power
                              + fast_vehicles_distribution[t] * self.P_quick / self.efficiency)
-                ev_power = charging_power - discharging_power
+                ev_power = solution.get_value(slow_charge[t]) * self.P_slow - solution.get_value(slow_discharge[t]) * self.P_slow
                 net_power_per_half_hour.append(net_power)
                 ev_vector.append(ev_power)
 
@@ -387,9 +383,8 @@ class EVChargingOptimizer:
         # penalty_weight = 1000  # 惩罚权重，根据问题规模和重要性调整
         # penalty_term = model.sum(slack_EV_state[t] * penalty_weight for t in range(self.N_SLOTS))
         # 计算每个时段的电网总负载，考虑慢充充电、慢充放电和快充充电
-        penalty_v2g = 0.01  # v2g惩罚权重，尽量小
-        penalty_term = ( model.sum(state_charge[t] * penalty_v2g for t in range(self.N_SLOTS))
-                        + model.sum(state_discharge[t] * penalty_v2g for t in range(self.N_SLOTS)))
+        penalty_v2g = 0.9  # v2g惩罚权重，尽量小
+        penalty_term = 0
 
         P_total = [office_P_BASIC[t] +
                    (state_charge[t] * self.P_slow * self.DELTA_T / self.efficiency
@@ -630,7 +625,7 @@ def calculate_arriving_vehicles(charging_distribution, leaving_vehicles):
 
 def calculate_P_basic(nodedata_dict, re_capacity_dict):
     P_basic_dict = {}
-    for hour in range(48):
+    for hour in range(24):
         load_matrix = nodedata_dict[hour]
         re_matrix = re_capacity_dict.get(hour, np.zeros_like(load_matrix))
 
@@ -640,18 +635,17 @@ def calculate_P_basic(nodedata_dict, re_capacity_dict):
 
             # 对于pv和wt，检查节点是否在对应的矩阵中
             if node in re_matrix[:, 0]:
-                re_index = np.where(re_matrix[:, 0] == node)[0][0]
-                re = re_matrix[re_index, 1]
-
+                pv_index = np.where(re_matrix[:, 0] == node)[0][0]
+                re  = re_matrix[pv_index, 1]
             else:
                 re = 0
 
             net_load = load - re
 
             if node not in P_basic_dict:
-                P_basic_dict[node] = [net_load]
+                P_basic_dict[node] = [net_load] * 2
             else:
-                P_basic_dict[node].extend([net_load])
+                P_basic_dict[node].extend([net_load] * 2)
 
     return P_basic_dict
 
@@ -666,6 +660,8 @@ def P_basic_and_EV(P_basic_dict, work_slow_charging_distribution, home_charging_
     efficiency = 0.9
     # 初始化存储每个节点包括EV负载后的总负载的字典
     node_P_basic_and_EV = {}
+    node_unorder_EV = {}
+
 
     for node in nodes:
         P_basic = P_basic_dict.get(node, [0] * N_SLOTS)  # 获取基础负载
@@ -719,9 +715,11 @@ def P_basic_and_EV(P_basic_dict, work_slow_charging_distribution, home_charging_
 
         # 将EV负载与基础负载相加得到总负载
         P_total_with_EV = [P_basic[t] + EV_load[t] for t in range(N_SLOTS)]
+        P_total_unorder_EV = [EV_load[t] for t in range(N_SLOTS)]
         node_P_basic_and_EV[node] = P_total_with_EV
+        node_unorder_EV[node] = P_total_unorder_EV
 
-    return node_P_basic_and_EV
+    return node_P_basic_and_EV,  node_unorder_EV
 
 
 # 定义一个辅助函数用于保存包含向量值的字典到CSV
@@ -737,7 +735,7 @@ def save_dict_to_csv(base_path, data_dict, filename):
     # 保存到CSV
     df.to_csv(os.path.join(base_path, f'{filename}.csv'), index=False)
 
-def EVload(EV_Q1, EV_S1, EV_2, EV_3, EV_4,EV_penetration,v2g_ratio,file_path, nodedata_dict, re_capacity_dict):
+def EVload(EV_Q1, EV_S1, EV_2, EV_3, EV_4,EV_penetration,v2g_ratio,file_path,nodedata_dict, re_capacity_dict):
     # 初始化存储每半小时所有节点EV负荷的字典
     node_EV_load = {time: np.zeros(len(nodes)) for time in range(48)}
     # 初始化存储每半小时所有节点EV slow负荷的字典
@@ -752,7 +750,7 @@ def EVload(EV_Q1, EV_S1, EV_2, EV_3, EV_4,EV_penetration,v2g_ratio,file_path, no
     node_P_V2G_charge = {}
     node_P_V2G_discharge = {}
     # 初始化存储每个微电网48步长EV负荷的字典
-    mic_EV_load = {mic: np.zeros(48) for mic in range(4)}  # 4个微电网
+    mic_EV_load_slow = {mic: np.zeros(48) for mic in range(4)}  # 4个微电网
     # 初始化存储每个微电网48步长EV负荷的字典
     mic_EV_load_quick = {mic: np.zeros(48) for mic in range(4)}  # 4个微电网
 
@@ -787,27 +785,14 @@ def EVload(EV_Q1, EV_S1, EV_2, EV_3, EV_4,EV_penetration,v2g_ratio,file_path, no
     if not os.path.exists(base_path):
         os.makedirs(base_path)
 
-    # 使用辅助函数保存每个字典
-    save_dict_to_csv(base_path, work_slow_charging_distribution, 'work_slow_charging_distribution')
-    save_dict_to_csv(base_path,work_slow_leaving, 'work_slow_leaving')
-    save_dict_to_csv(base_path,work_slow_arriving, 'work_slow_arriving')
-
-    save_dict_to_csv(base_path,home_charging_distribution, 'home_charging_distribution')
-    save_dict_to_csv(base_path,home_leaving, 'home_leaving')
-    save_dict_to_csv(base_path,home_arriving, 'home_arriving')
-
-    save_dict_to_csv(base_path,not_charging_distribution, 'not_charging_distribution')
-    save_dict_to_csv(base_path,not_charging_leaving, 'not_charging_leaving')
-    save_dict_to_csv(base_path,not_charging_arriving, 'not_charging_arriving')
-
-    save_dict_to_csv(base_path,work_quick_charging_distribution, 'work_quick_charging_distribution')
-
     # Pbasic字典
     P_basic_dict = calculate_P_basic(nodedata_dict, re_capacity_dict)
 
     #没有优化的负载：
-    node_P_basic_and_EV = P_basic_and_EV(P_basic_dict, work_slow_charging_distribution, home_charging_distribution,
+    node_P_basic_and_EV, node_unorder_EV = P_basic_and_EV(P_basic_dict, work_slow_charging_distribution, home_charging_distribution,
                                          work_quick_charging_distribution,work_slow_arriving,home_arriving)
+
+
 
     # 更新快充负荷数据
     for node, quick_load_vector in work_quick_charging_distribution.items():
@@ -891,6 +876,7 @@ def EVload(EV_Q1, EV_S1, EV_2, EV_3, EV_4,EV_penetration,v2g_ratio,file_path, no
 
 
 
+
     # 对每个节点，按照节点范围汇总微电网的EV负荷
     for node in nodes:
         # 获取当前节点的索引
@@ -909,11 +895,149 @@ def EVload(EV_Q1, EV_S1, EV_2, EV_3, EV_4,EV_penetration,v2g_ratio,file_path, no
         # 如果节点属于某个微电网，更新对应微电网的负荷
         if mic_idx is not None:
             for t in range(48):
-                mic_EV_load[mic_idx][t] += node_EV_slowload[t][node_idx]
+                mic_EV_load_slow[mic_idx][t] += node_EV_slowload[t][node_idx]
                 mic_EV_load_quick[mic_idx][t] += node_quick_EV_load[t][node_idx]
-    print("EV计算结束")
-    return node_EV_load, mic_EV_load, node_P_total, node_P_basic_and_EV, mic_EV_load_quick, node_slack_load, P_basic_dict
 
+    save_dict_to_csv(base_path, mic_EV_load_slow, 'mic_EV_load_slow')
+    save_dict_to_csv(base_path, mic_EV_load_quick, 'mic_EV_load_quick')
+    print("EV计算结束")
+    return node_EV_load, mic_EV_load_slow, node_P_total, node_P_basic_and_EV, mic_EV_load_quick, node_slack_load, P_basic_dict
+
+def EVload_node(EV_Q1, EV_S1, EV_2, EV_3, EV_4,EV_penetration,v2g_ratio,file_path,nodedata_dict, re_capacity_dict,node_num):
+    # 初始化存储每半小时所有节点快充EV负荷的字典
+    node_quick_EV_load = {time: np.zeros(len(nodes)) for time in range(48)}
+    # 初始化存储每个微电网48步长EV负荷的字典
+    mic_EV_load_slow = {mic: np.zeros(48) for mic in range(4)}  # 4个微电网
+    # 初始化存储每个微电网48步长EV负荷的字典
+    mic_EV_load_quick = {mic: np.zeros(48) for mic in range(4)}  # 4个微电网
+
+
+    # 充电选择实例
+    EV_choice = ChargingManager(EV_Q1, EV_S1, EV_2, EV_3, EV_4,EV_penetration,v2g_ratio)
+    # 充电矩阵
+    charging_home_matrix, charging_work_slow_matrix, charging_work_quick_matrix, not_charging_matrix \
+        = EV_choice.calculate_vehicle_distribution()
+    # 处理为字典
+    charging_distribution_work_slow, charging_distribution_work_quick, charging_distribution_home, distribution_not_charging \
+        = extract_charging_distribution(charging_home_matrix, charging_work_slow_matrix, charging_work_quick_matrix, not_charging_matrix)
+    #计算离开和到达
+    # 工作慢充
+    leaving_vehicles_work_slow = calculate_leaving_vehicles(charging_distribution_work_slow)
+    work_slow_charging_distribution, work_slow_leaving, work_slow_arriving\
+        = calculate_arriving_vehicles(charging_distribution_work_slow, leaving_vehicles_work_slow)
+    # 家慢充
+    leaving_vehicles_home = calculate_leaving_vehicles(charging_distribution_home)
+    home_charging_distribution, home_leaving, home_arriving \
+        = calculate_arriving_vehicles(charging_distribution_home, leaving_vehicles_home)
+    # 不充电
+    leaving_not_charging = calculate_leaving_vehicles(distribution_not_charging)
+    not_charging_distribution, not_charging_leaving, not_charging_arriving \
+        = calculate_arriving_vehicles(distribution_not_charging, leaving_not_charging)
+    # 工作快充
+    work_quick_charging_distribution = {node: np.round(vector).astype(int) for node, vector
+                                        in charging_distribution_work_quick.items()}
+
+    # 定义一个辅助函数用于保存字典到CSV
+    base_path = os.path.join(file_path, str(EV_penetration), str(v2g_ratio))
+    if not os.path.exists(base_path):
+        os.makedirs(base_path)
+
+    # Pbasic字典
+    P_basic_dict = calculate_P_basic(nodedata_dict, re_capacity_dict)
+
+    #没有优化的负载：
+    node_P_basic_and_EV, node_unorder_EV = P_basic_and_EV(P_basic_dict, work_slow_charging_distribution, home_charging_distribution,
+                                         work_quick_charging_distribution,work_slow_arriving,home_arriving)
+
+    # 更新快充负荷数据
+    for node, quick_load_vector in work_quick_charging_distribution.items():
+        # 获取当前节点的索引
+        node_idx = node_mapping[node]
+        P_quick = quick_load_vector * 42 * 0.5
+        for t in range(48):
+            node_quick_EV_load[t][node_idx] = P_quick[t]
+
+    #优化实例
+    optimize = EVChargingOptimizer()
+    # 获取当前节点的索引
+    node_idx = node_mapping[node_num]
+
+    # Office节点
+    if 100 <= node_num < 199:
+        P_basic = P_basic_dict[node_num]
+        if max(work_slow_charging_distribution.get(node_num, [0])) == 0:
+            ev_load_vector, net_power, P_total_calculated, total_slcak, v2g_charge_values, v2g_discharge_values\
+                = optimize.optimizeOfficeChargingV2GPattern(
+                fast_vehicles_distribution=work_quick_charging_distribution.get(node_num, []),
+                office_P_BASIC=P_basic,
+                not_charging_distribution=not_charging_distribution.get(node_num, []),
+                leaving_not_charging=not_charging_leaving.get(node_num, []))
+
+        else: # 有慢充
+            # 进行优化
+            ev_load_vector, net_power, P_total_calculated, total_slcak, v2g_charge_values, v2g_discharge_values\
+                = optimize.optimizeOfficeChargingPattern(
+                slow_vehicles_distribution=work_slow_charging_distribution.get(node_num, []),
+                slow_arriving_vehicles=work_slow_arriving.get(node_num, []),
+                slow_leaving_vehicles=work_slow_leaving.get(node_num, []),
+                fast_vehicles_distribution=work_quick_charging_distribution.get(node_num, []),
+                office_P_BASIC=P_basic,
+                not_charging_distribution=not_charging_distribution.get(node_num, []),
+                leaving_not_charging=not_charging_leaving.get(node_num, [])
+            )
+    else:  # 社区节点
+        P_basic = P_basic_dict[node_num]
+        if max(home_charging_distribution.get(node_num, [0])) == 0:
+            # # 如果没有社区车辆，跳过优化步骤
+            # ev_load_vector = np.zeros(48)  # 48个半小时时段
+            # P_total_calculated = P_basic
+            ev_load_vector, net_power, P_total_calculated, total_slcak, v2g_charge_values, v2g_discharge_values\
+                = optimize.optimizeCommunityChargingV2GPattern(
+                community_P_BASIC=P_basic,
+                not_charging_distribution=not_charging_distribution.get(node_num, []),
+                leaving_not_charging=not_charging_leaving.get(node_num, [])
+            )
+        else:
+            # 进行优化
+            ev_load_vector, net_power, P_total_calculated, total_slcak, v2g_charge_values, v2g_discharge_values\
+                = optimize.optimizeCommunityChargingPattern(
+                community_vehicles_distribution=home_charging_distribution.get(node_num, []),
+                community_arriving_vehicles=home_arriving.get(node_num, []),
+                community_leaving_vehicles=home_leaving.get(node_num, []),
+                community_P_BASIC=P_basic,
+                not_charging_distribution=not_charging_distribution.get(node_num, []),
+                leaving_not_charging=not_charging_leaving.get(node_num, [])
+            )
+
+    # 使用该节点的EV负荷更新node_EV_load字典中的向量
+    node_P_total = P_total_calculated
+    node_slack_load = total_slcak
+    node_P_V2G_charge = v2g_charge_values
+    node_P_V2G_discharge = v2g_discharge_values
+
+
+    # 获取当前节点的索引
+    node_idx = node_mapping[node_num]
+    # 确定当前节点属于哪个微电网
+    mic_idx = None
+    if 100 <= node_num <= 199:
+        mic_idx = 0
+    elif 200 <= node_num <= 299:
+        mic_idx = 1
+    elif 300 <= node_num <= 399:
+        mic_idx = 2
+    elif 400 <= node_num <= 499:
+        mic_idx = 3
+
+    # 如果节点属于某个微电网，更新对应微电网的负荷
+    if mic_idx is not None:
+        for t in range(48):
+            mic_EV_load_slow[mic_idx][t] += ev_load_vector[t]
+            mic_EV_load_quick[mic_idx][t] += node_quick_EV_load[t][node_idx]
+
+    print("EV计算结束")
+    return net_power, mic_EV_load_slow, node_P_total, node_P_basic_and_EV, mic_EV_load_quick, node_slack_load, P_basic_dict
+# EV负荷 慢充付费 总负荷 无序 快充付费 slack 基础负荷
 class EVLoadVisualization:
     def __init__(self, P_BASIC, P_total):
         self.P_BASIC = P_BASIC
@@ -933,7 +1057,7 @@ class EVLoadVisualization:
         plt.legend()
         plt.grid(True)
         plt.show()
-# #
+# # #
 # # #实例调用
 # EV_Q1 = np.array(prices_real)
 # EV_S1 = np.array(prices_real)
@@ -941,98 +1065,113 @@ class EVLoadVisualization:
 # EV_3 = np.array(prices_real)
 # EV_4 = np.array(prices_real)
 #
-# EV_p = 800 * 0.9
-# v2g = 0.5
-#
-# node_EV_load, mic_EV_load, node_P_total, node_P_basic_and_EV,mic_EV_load_quick, node_slack_load, P_basic_dict \
-#     = EVload(EV_Q1, EV_S1, EV_2, EV_3, EV_4,EV_p,v2g,'data2', nodedata_dict, re_capacity_dict)
-#
-# # # 创建可视化类的实例
-# # # Pbasic字典
-# # node = 101
-# # P_TOTAL = node_P_total[node]
-# # P_BASIC = node_P_basic_and_EV[node]
-# # P_SLACK = node_slack_load[node]
-# # visualizer = EVLoadVisualization(P_BASIC=P_BASIC, P_total=P_TOTAL)
-# # #绘制和查看曲线
-# # visualizer.plot_load_curves()
-# # print(sum(P_TOTAL))
-# # print(sum(P_BASIC))
-# # print(sum(P_SLACK))
-#
-# node = 102
-# P_TOTAL = node_P_total[node]
-# P_BASIC = node_P_basic_and_EV[node]
-# P_SLACK = node_slack_load[node]
-# visualizer = EVLoadVisualization(P_BASIC=P_BASIC, P_total=P_TOTAL)
-# #绘制和查看曲线
-# visualizer.plot_load_curves()
-# print(sum(P_TOTAL))
-# print(sum(P_BASIC))
-# print(sum(P_SLACK))
-#
-# node = 206
-# P_TOTAL = node_P_total[node]
-# P_BASIC = node_P_basic_and_EV[node]
-# P_SLACK = node_slack_load[node]
-# visualizer = EVLoadVisualization(P_BASIC=P_BASIC, P_total=P_TOTAL)
-# #绘制和查看曲线
-# visualizer.plot_load_curves()
-# print(sum(P_TOTAL))
-# print(sum(P_BASIC))
-# print(sum(P_SLACK))
+# output_directory = 'Figure/EVload'
+# if not os.path.exists(output_directory):
+#     os.makedirs(output_directory)
 
-# node = 205
-# P_TOTAL = node_P_total[node]
-# P_BASIC = node_P_basic_and_EV[node]
-# P_SLACK = node_slack_load[node]
-# visualizer = EVLoadVisualization(P_BASIC=P_BASIC, P_total=P_TOTAL)
-# #绘制和查看曲线
-# visualizer.plot_load_curves()
-# print(sum(P_TOTAL))
-# print(sum(P_BASIC))
-# print(sum(P_SLACK))
 #
-# node = 305
-# P_TOTAL = node_P_total[node]
-# P_BASIC = node_P_basic_and_EV[node]
-# P_SLACK = node_slack_load[node]
-# visualizer = EVLoadVisualization(P_BASIC=P_BASIC, P_total=P_TOTAL)
-# #绘制和查看曲线
-# visualizer.plot_load_curves()
-# print(sum(P_TOTAL))
-# print(sum(P_BASIC))
-# print(sum(P_SLACK))
-# #
-# node = 317
-# P_TOTAL = node_P_total[node]
-# P_BASIC = node_P_basic_and_EV[node]
-# P_SLACK = node_slack_load[node]
-# visualizer = EVLoadVisualization(P_BASIC=P_BASIC, P_total=P_TOTAL)
-# #绘制和查看曲线
-# visualizer.plot_load_curves()
-# print(sum(P_TOTAL))
-# print(sum(P_BASIC))
-# print(sum(P_SLACK))
+# EV_penetration_values = [800 * 0.15] #
+# v2g_ratio_values = [0] #
 #
-# node = 318
-# P_TOTAL = node_P_total[node]
-# P_BASIC = node_P_basic_and_EV[node]
-# P_SLACK = node_slack_load[node]
-# visualizer = EVLoadVisualization(P_BASIC=P_BASIC, P_total=P_TOTAL)
-# #绘制和查看曲线
-# visualizer.plot_load_curves()
-# print(sum(P_TOTAL))
-# print(sum(P_BASIC))
-# print(sum(P_SLACK))
+# # 循环更新变量并调用main函数，填充DataFrame，并显示进度
+# total_iterations = len(EV_penetration_values) * len(v2g_ratio_values)
 #
-# node = 401
-# P_TOTAL = node_P_total[node]
-# P_BASIC = node_P_basic_and_EV[node]
-# P_SLACK = node_slack_load[node]
-# visualizer = EVLoadVisualization(P_BASIC=P_BASIC, P_total=P_TOTAL)
-# #绘制和查看曲线
-# visualizer.plot_load_curves()
-# print(sum(P_TOTAL))
-# print(sum(P_BASIC))
-# print(sum(P_SLACK))
+# for ev_p in EV_penetration_values:
+#     for v2g in v2g_ratio_values:
+#
+#         node_EV_load, mic_EV_load, node_P_total, node_P_basic_and_EV,mic_EV_load_quick, node_slack_load, P_basic_dict \
+#             = EVload(EV_Q1, EV_S1, EV_2, EV_3, EV_4,ev_p,v2g,'data2')
+#
+#         for node in [102, 206, 317, 401]:
+#             P_TOTAL = node_P_total[node]
+#             P_BASIC = node_P_basic_and_EV[node]
+#             P_SLACK = node_slack_load[node]
+#
+#             visualizer = EVLoadVisualization(P_BASIC=P_BASIC, P_total=P_TOTAL)
+#             visualizer.plot_load_curves()  # Plot the data
+#
+#             # Save the figure
+#             plt.savefig(f'{output_directory}/ev_p_{ev_p}_v2g_node_{node}.png')
+#             plt.close()  # Close the plot to free up memory
+#
+#             print(sum(P_TOTAL))
+#             print(sum(P_BASIC))
+#             print(sum(P_SLACK))
+
+        # # 创建可视化类的实例
+        # node = 102
+        # P_TOTAL = node_P_total[node]
+        # P_BASIC = node_P_basic_and_EV[node]
+        # P_SLACK = node_slack_load[node]
+        # visualizer = EVLoadVisualization(P_BASIC=P_BASIC, P_total=P_TOTAL)
+        # #绘制和查看曲线
+        # visualizer.plot_load_curves()
+        # print(sum(P_TOTAL))
+        # print(sum(P_BASIC))
+        # print(sum(P_SLACK))
+        #
+        # node = 206
+        # P_TOTAL = node_P_total[node]
+        # P_BASIC = node_P_basic_and_EV[node]
+        # P_SLACK = node_slack_load[node]
+        # visualizer = EVLoadVisualization(P_BASIC=P_BASIC, P_total=P_TOTAL)
+        # #绘制和查看曲线
+        # visualizer.plot_load_curves()
+        # print(sum(P_TOTAL))
+        # print(sum(P_BASIC))
+        # print(sum(P_SLACK))
+
+        # node = 205
+        # P_TOTAL = node_P_total[node]
+        # P_BASIC = node_P_basic_and_EV[node]
+        # P_SLACK = node_slack_load[node]
+        # visualizer = EVLoadVisualization(P_BASIC=P_BASIC, P_total=P_TOTAL)
+        # #绘制和查看曲线
+        # visualizer.plot_load_curves()
+        # print(sum(P_TOTAL))
+        # print(sum(P_BASIC))
+        # print(sum(P_SLACK))
+        #
+        # node = 305
+        # P_TOTAL = node_P_total[node]
+        # P_BASIC = node_P_basic_and_EV[node]
+        # P_SLACK = node_slack_load[node]
+        # visualizer = EVLoadVisualization(P_BASIC=P_BASIC, P_total=P_TOTAL)
+        # #绘制和查看曲线
+        # visualizer.plot_load_curves()
+        # print(sum(P_TOTAL))
+        # print(sum(P_BASIC))
+        # print(sum(P_SLACK))
+        # #
+        # node = 317
+        # P_TOTAL = node_P_total[node]
+        # P_BASIC = node_P_basic_and_EV[node]
+        # P_SLACK = node_slack_load[node]
+        # visualizer = EVLoadVisualization(P_BASIC=P_BASIC, P_total=P_TOTAL)
+        # #绘制和查看曲线
+        # visualizer.plot_load_curves()
+        # print(sum(P_TOTAL))
+        # print(sum(P_BASIC))
+        # print(sum(P_SLACK))
+        #
+        # node = 318
+        # P_TOTAL = node_P_total[node]
+        # P_BASIC = node_P_basic_and_EV[node]
+        # P_SLACK = node_slack_load[node]
+        # visualizer = EVLoadVisualization(P_BASIC=P_BASIC, P_total=P_TOTAL)
+        # #绘制和查看曲线
+        # visualizer.plot_load_curves()
+        # print(sum(P_TOTAL))
+        # print(sum(P_BASIC))
+        # print(sum(P_SLACK))
+        #
+        # node = 401
+        # P_TOTAL = node_P_total[node]
+        # P_BASIC = node_P_basic_and_EV[node]
+        # P_SLACK = node_slack_load[node]
+        # visualizer = EVLoadVisualization(P_BASIC=P_BASIC, P_total=P_TOTAL)
+        # #绘制和查看曲线
+        # visualizer.plot_load_curves()
+        # print(sum(P_TOTAL))
+        # print(sum(P_BASIC))
+        # print(sum(P_SLACK))

@@ -27,7 +27,7 @@ EV_3_expanded = expand_array(EV_3)
 EV_4_expanded = expand_array(EV_4)
 
 
-def main(ev_p, v2g, file_path, nodedata_dict, re_capacity_dict,node):
+def main(ev_p, v2g, file_path, nodedata_dict, re_capacity_dict, node):
 
     node_EV_load, mic_EV_load, node_P_total, node_P_basic_and_EV, mic_EV_load_quick, node_slack_load, P_basic_dict\
         = EVload_node(EV_Q1, EV_S1, EV_2, EV_3, EV_4, ev_p, v2g, file_path, nodedata_dict, re_capacity_dict, node)

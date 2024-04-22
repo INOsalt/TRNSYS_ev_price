@@ -1,6 +1,6 @@
 import os
 from tqdm import tqdm
-from gridinfo import nodes
+from gridinfo import nodes, initial_EV, node_mapping
 from anode_EVloadDOC_v2gorder import EVload_node
 from docplex.mp.model import Model
 import importlib
@@ -18,7 +18,7 @@ v2g = 0.5
 data1_dir = 'data_annual'
 
 # 读取CSV文件
-folder_path = 'annual/'
+folder_path = 'annual_onlyPV/'
 p_from_grid_filename = folder_path + 'P_from_grid_kW_total.csv'
 reactive_power_filename = folder_path + 'reactive_power_total.csv'
 p_to_grid_filename = folder_path + 'P_to_grid_kW_total.csv'
@@ -30,14 +30,15 @@ p_to_grid_df = pd.read_csv(p_to_grid_filename, dtype={'my_column': float})
 # nodes = list(p_from_grid_df.columns)  # 假设列名为节点编号
 
 # 创建初始向量
-EV_initial_capacity = np.full(120, 70)  # 每辆EV的初始容量
-EV_initial_SOC = np.full(120, 0.9)  # 每辆EV的初始SOC
+EV_num = initial_EV[node_mapping[node_num]]
+EV_initial_capacity = np.full(EV_num, 70)  # 每辆EV的初始容量
+EV_initial_SOC = np.full(EV_num, 0.9)  # 每辆EV的初始SOC
 
-# 定义路径
-daily_mileages_path = 'daily_vehicle_mileages.csv'
-
-# 读取每日里程文件
-daily_mileages = pd.read_csv(daily_mileages_path)
+# # 定义路径
+# daily_mileages_path = 'daily_vehicle_mileages.csv'
+# # 读取每日里程文件
+# daily_mileages = pd.read_csv(daily_mileages_path)
+daily_average = 12.2 #单程平均出行距离 12.2 公里
 
 
 def assign_dod_to_nearest_level(dod):
@@ -65,7 +66,7 @@ for day in range(365):
         departure_time, return_time = int(times[0]), int(times[1])
 
         # 计算能耗
-        energy_consumed = daily_mileages.iloc[day, vehicle_id] * 0.188
+        energy_consumed = daily_average * 0.188
         # 更新SOC
         EV_initial_SOC[vehicle_id] -= (energy_consumed / EV_initial_capacity[vehicle_id])
 
@@ -94,6 +95,7 @@ for day in range(365):
     p_from_grid_day = p_from_grid_df.iloc[start_row:end_row]
     reactive_power_day = reactive_power_df.iloc[start_row:end_row]
     p_to_grid_day = p_to_grid_df.iloc[start_row:end_row]
+
 
     nodedata_dict = {}
     re_capacity_dict = {}

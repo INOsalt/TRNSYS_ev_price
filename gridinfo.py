@@ -30,14 +30,19 @@ node_mapping = {node: index for index, node in enumerate(nodes)}
 reverse_node_mapping = {idx: node for node, idx in node_mapping.items()}
 
 # 初始化所有车辆都停泊在起点，没有车辆在移动状态
-start_points = [202, 203, 204, 205, 206, 208, 209, 302, 303, 304, 305, 306, 307, 308, 309, 313, 314, 315, 316, 317,
-                318, 401, 402, 403, 404, 405, 406, 407]
-end_points = [101, 102, 103, 104, 105, 106]
+df_start = pd.read_csv('start.csv')
+df_end = pd.read_csv('end.csv')
+# Extract columns to lists
+start_points = df_start['bus_i'].to_list()
+# print(start_points)
+EV_num = df_start['EV_num'].to_list()
+end_points = df_end['bus_i'].to_list()
 
 # 初始车辆分布
 initial_EV = np.zeros(2 * num_nodes)
-starts = np.array([node_mapping[point] for point in start_points])
-initial_EV[starts] = 1000
+starts_indices = np.array([node_mapping[point] for point in start_points])
+for i, index in enumerate(starts_indices):
+    initial_EV[index] += EV_num[i]
 
 #直接相连的边: {(12, 2), (5, 4), (3, 5), (3, 2), (15, 3), (6, 1), (1, 4), (2, 1), (26, 5), (5, 0), (2, 5), (25, 3), (10, 3), (2, 4), (4, 0)}
 #间隔一个点连接的边: {(2, 1), (2, 5), (10, 3), (26, 25), (12, 2), (7, 6), (12, 6), (10, 12), (25, 26), (5, 0), (16, 15), (16, 25), (12, 10), (24, 10), (3, 2), (5, 4), (15, 3), (24, 15), (1, 4), (9, 10), (6, 12), (25, 3), (3, 5), (8, 12), (6, 1), (26, 5), (28, 25), (2, 4)}
@@ -69,9 +74,9 @@ for filename in os.listdir(folder_path):
 C_buy = [0.2205, 0.2205, 0.2205, 0.2205, 0.2205, 0.2205, 0.2205, 0.2205,
          0.5802, 0.5802, 0.9863, 0.9863, 0.5802, 0.5802, 0.9863, 0.9863,
          0.9863, 0.9863, 0.9863, 0.5802, 0.5802, 0.5802, 0.5802, 0.5802]
-C_sell = [0.453, 0.453, 0.453, 0.453, 0.453, 0.453, 0.453, 0.453, 0.453,
-          0.453, 0.453, 0.453, 0.453, 0.453, 0.453, 0.453, 0.453, 0.453,
-          0.453, 0.453, 0.453, 0.453, 0.453, 0.453, 0.453, 0.453, 0.453]
+C_sell = [0.453, 0.453, 0.453, 0.453, 0.453, 0.453, 0.453, 0.453,
+          0.453, 0.453, 0.453, 0.453, 0.453, 0.453, 0.453, 0.453,
+          0.453, 0.453, 0.453, 0.453, 0.453, 0.453, 0.453, 0.453]
 C_buy_business = [
     0.2867, 0.2867, 0.2867, 0.2867, 0.2867, 0.2867, 0.2867, 0.2867,
     0.7093, 0.7093,
@@ -98,6 +103,11 @@ bus = {col: bus_df[col].values for col in bus_df.columns}
 gen_df = pd.read_csv('grid/gen_data_large.csv')
 # 将gen_df转换为字典，其中每个值都是NumPy数组
 gen = {col: gen_df[col].values for col in gen_df.columns}
+# print(gen)
+# gen_df1 = pd.read_csv('grid/gen_data_large.csv')
+# # 将gen_df转换为字典，其中每个值都是NumPy数组
+# gen1 = {col: gen_df1[col].values for col in gen_df1.columns}
+# print(gen1)
 
 # pvwt_reactive_df = pd.read_csv('grid/pvwt_reactive.csv')
 # pvwt_reactive = {col: pvwt_reactive_df[col].values for col in pvwt_reactive_df.columns}

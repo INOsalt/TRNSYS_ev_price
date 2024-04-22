@@ -8,9 +8,8 @@ import os
 
 
 class OPF_PyPSA:
-    def __init__(self, node_EV_load, nodedata_dict, re_capacity_dict):
+    def __init__(self, nodedata_dict, re_capacity_dict):
         self.net = pypsa.Network()
-        self.node_EV_load = node_EV_load
         self.gen_cost = {
             101: (0.01199, 37.5510, 117.7551),
             201: (0.02801, 25.8027, 24.6382),
@@ -78,7 +77,7 @@ class OPF_PyPSA:
         # PyPSA的时间序列通常是pandas.DataFrame，索引是时间点（快照），列名是网络元素的名称。
 
         # 为每个负荷创建时间序列
-        for node_index, loads in enumerate(zip(*self.node_EV_load.values())):
+        for node_index, loads in self.nodedata_dict.items():
             node_name = reverse_node_mapping[node_index]
             self.net.add("Load", node_name, bus=node_name, p_set=loads)
 

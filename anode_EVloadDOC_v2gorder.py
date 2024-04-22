@@ -9,13 +9,14 @@ import pandas as pd
 import os
 
 class EVChargingOptimizer:
-    def __init__(self):
+    def __init__(self,ev_num):
         self.CAP_BAT_EV = 42  # 固定的每辆车充电需求（70kWh*0.6,70来自平均统计数据）
         self.DELTA_T = 0.5  # 每个时间段长度，30分钟
         self.N_SLOTS = 48  # 一天中的时间段数量
         self.P_slow = 7 # kW
         self.P_quick = 42 # kW
         self.efficiency = 0.9
+        self.ev_num = ev_num
 
     def optimizeCommunityChargingPattern(self, community_vehicles_distribution, community_arriving_vehicles,
                                          community_leaving_vehicles, community_P_BASIC):
@@ -43,11 +44,11 @@ class EVChargingOptimizer:
             net_charging_provided = model.sum(
                 (charge[t_prime] - discharge[t_prime]) * self.P_slow * self.DELTA_T
                 for t_prime in range(t + 1))  # 包括当前时段
-            constraints.append(net_charging_provided + slack_EV[t] >= emergency_charging_needed)
-            constraints.append(slack_EV[t] <= emergency_charging_needed * 0.1)
+            constraints.append(net_charging_provided + slack_EV[t] >= emergency_charging_needed * 0.5) #晚上还能充
+            # constraints.append(slack_EV[t] <= emergency_charging_needed * 0.1)
 
         # 约束3：总充电量需满足所有车辆的累计需求
-        total_charging_demand = sum(community_leaving_vehicles) * self.CAP_BAT_EV
+        total_charging_demand = self.ev_num * self.CAP_BAT_EV
         # total_charging_demand_upper = sum(community_arriving_vehicles) * self.CAP_BAT_EV / 0.6 * 0.7
         # total_charging_demand_lower = sum(community_arriving_vehicles) * self.CAP_BAT_EV / 0.6 * 0.4
         total_charging_provided = model.sum(charge[t] * self.P_slow * self.DELTA_T
@@ -168,7 +169,7 @@ class EVChargingOptimizer:
 
 
         # 约束3：总充电量需满足所有车辆的累计需求
-        total_charging_demand = sum(slow_leaving_vehicles) * self.CAP_BAT_EV
+        total_charging_demand = self.ev_num * self.CAP_BAT_EV
         total_charging_provided = model.sum(slow_charge[t] * self.P_slow * self.DELTA_T
                                             for t in range(self.N_SLOTS))
         total_discharging_reduced = model.sum(slow_discharge[t] * self.P_slow * self.DELTA_T
@@ -398,7 +399,7 @@ def calculate_P_basic(nodedata_dict, re_capacity_dict):
     return P_basic_dict
 
 
-def P_basic_and_EV(P_basic_dict, slow_charging_distribution, quick_charging_distribution,slow_arriving):
+def P_basic_and_EV(P_basic_dict, slow_charging_distribution, quick_charging_distribution,slow_arriving,node_num):
     CAP_BAT_EV = 42  # 固定的每辆车充电需求（70kWh*0.6）
     DELTA_T = 0.5  # 每个时间段长度，30分钟
     N_SLOTS = 48  # 一天中的时间段数量
@@ -410,61 +411,61 @@ def P_basic_and_EV(P_basic_dict, slow_charging_distribution, quick_charging_dist
     node_unorder_EV = {}
 
 
-    for node in nodes:
-        P_basic = P_basic_dict.get(node, [0] * N_SLOTS)  # 获取基础负载
-        EV_load = [0] * N_SLOTS  # 初始化EV负载列表
+    node = node_num
+    P_basic = P_basic_dict.get(node, [0] * N_SLOTS)  # 获取基础负载
+    EV_load = [0] * N_SLOTS  # 初始化EV负载列表
 
-        if 100 <= node < 199:  # Office节点
-            slow_charging_slots = slow_charging_distribution
-            quick_charging_slots = quick_charging_distribution
-            arriving_slots = slow_arriving
+    if 100 <= node < 199:  # Office节点
+        slow_charging_slots = slow_charging_distribution
+        quick_charging_slots = quick_charging_distribution
+        arriving_slots = slow_arriving
 
-            # 快充车辆充电计算
-            for t in range(N_SLOTS):
-                EV_load[t] += quick_charging_slots[t] * P_quick / efficiency
+        # 快充车辆充电计算
+        for t in range(N_SLOTS):
+            EV_load[t] += quick_charging_slots[t] * P_quick / efficiency
 
-            # 0时刻的车辆充电处理
-            for i in range(0, 12):
-                if i < N_SLOTS:
-                    EV_load[i] += slow_charging_slots[0] * P_slow / efficiency
+        # 0时刻的车辆充电处理
+        for i in range(0, 12):
+            if i < N_SLOTS:
+                EV_load[i] += slow_charging_slots[0] * P_slow / efficiency
 
-            # 从1时刻开始使用arriving_slots
-            for t in range(1, N_SLOTS):
-                if t-1 < len(arriving_slots):
-                    arriving_cars = arriving_slots[t-1]
-                    for i in range(t, min(t + 12, N_SLOTS)):
-                        EV_load[i] += arriving_cars * P_slow / efficiency
-                        if np.sum(EV_load[:i + 1]) >= sum(arriving_slots) * CAP_BAT_EV:
-                            break
-                if np.sum(EV_load) * efficiency >= sum(arriving_slots) * CAP_BAT_EV:
-                    break
+        # 从1时刻开始使用arriving_slots
+        for t in range(1, N_SLOTS):
+            if t-1 < len(arriving_slots):
+                arriving_cars = arriving_slots[t-1]
+                for i in range(t, min(t + 12, N_SLOTS)):
+                    EV_load[i] += arriving_cars * P_slow / efficiency
+                    if np.sum(EV_load[:i + 1]) >= sum(arriving_slots) * CAP_BAT_EV:
+                        break
+            if np.sum(EV_load) * efficiency >= sum(arriving_slots) * CAP_BAT_EV:
+                break
 
-        else:  # Home节点
-            slow_charging_slots = slow_charging_distribution
-            arriving_slots = slow_arriving
+    else:  # Home节点
+        slow_charging_slots = slow_charging_distribution
+        arriving_slots = slow_arriving
 
-            # 0时刻的车辆充电处理
-            for i in range(0, 12):
-                if i < N_SLOTS:
-                    EV_load[i] += slow_charging_slots[0] * P_slow / efficiency
+        # 0时刻的车辆充电处理
+        for i in range(0, 12):
+            if i < N_SLOTS:
+                EV_load[i] += slow_charging_slots[0] * P_slow / efficiency
 
-            # 从1时刻开始使用arriving_slots
-            for t in range(1, N_SLOTS):
-                if t-1 < len(arriving_slots):
-                    arriving_cars = arriving_slots[t-1]
-                    for i in range(t, min(t + 12, N_SLOTS)):
-                        EV_load[i] += arriving_cars * P_slow  / efficiency
-                        #检查负载是否够了
-                        if np.sum(EV_load[:i + 1]) >= sum(arriving_slots) * CAP_BAT_EV:
-                            break
-                if np.sum(EV_load) >= sum(arriving_slots) * CAP_BAT_EV:
-                    break
+        # 从1时刻开始使用arriving_slots
+        for t in range(1, N_SLOTS):
+            if t-1 < len(arriving_slots):
+                arriving_cars = arriving_slots[t-1]
+                for i in range(t, min(t + 12, N_SLOTS)):
+                    EV_load[i] += arriving_cars * P_slow  / efficiency
+                    #检查负载是否够了
+                    if np.sum(EV_load[:i + 1]) >= sum(arriving_slots) * CAP_BAT_EV:
+                        break
+            if np.sum(EV_load) >= sum(arriving_slots) * CAP_BAT_EV:
+                break
 
-        # 将EV负载与基础负载相加得到总负载
-        P_total_with_EV = [P_basic[t] + EV_load[t] for t in range(N_SLOTS)]
-        P_total_unorder_EV = [EV_load[t] for t in range(N_SLOTS)]
-        node_P_basic_and_EV[node] = P_total_with_EV
-        node_unorder_EV[node] = P_total_unorder_EV
+    # 将EV负载与基础负载相加得到总负载
+    P_total_with_EV = [P_basic[t] + EV_load[t] for t in range(N_SLOTS)]
+    P_total_unorder_EV = [EV_load[t] for t in range(N_SLOTS)]
+    node_P_basic_and_EV = P_total_with_EV
+    node_unorder_EV = P_total_unorder_EV
 
     return node_P_basic_and_EV,  node_unorder_EV
 
@@ -483,7 +484,7 @@ def save_dict_to_csv(base_path, data_dict, filename):
     df.to_csv(os.path.join(base_path, f'{filename}.csv'), index=False)
 
 def EVload_node(slow_charging_distribution, quick_charging_distribution,slow_arriving,slow_leaving,
-                EV_penetration,v2g_ratio,file_path,nodedata_dict, re_capacity_dict,node_num):
+                EV_penetration,v2g_ratio,file_path,nodedata_dict, re_capacity_dict,node_num,ev_num):
 
     # 初始化存储每半小时所有节点快充EV负荷的字典
     node_quick_EV_load = {time: np.zeros(len(nodes)) for time in range(48)}
@@ -503,7 +504,7 @@ def EVload_node(slow_charging_distribution, quick_charging_distribution,slow_arr
 
     #没有优化的负载：
     node_P_basic_and_EV, node_unorder_EV = P_basic_and_EV(P_basic_dict, slow_charging_distribution,
-                                                          quick_charging_distribution,slow_arriving)
+                                                          quick_charging_distribution,slow_arriving,node_num)
 
     # 更新快充负荷数据
 
@@ -511,7 +512,7 @@ def EVload_node(slow_charging_distribution, quick_charging_distribution,slow_arr
     node_quick_EV_load = quick_charging_distribution * 42
 
     #优化实例
-    optimize = EVChargingOptimizer()
+    optimize = EVChargingOptimizer(ev_num)
     # 获取当前节点的索引
     node_idx = node_mapping[node_num]
 
@@ -574,7 +575,7 @@ def EVload_node(slow_charging_distribution, quick_charging_distribution,slow_arr
             mic_EV_load_slow[mic_idx][t] += ev_load_vector[t]
             mic_EV_load_quick[mic_idx][t] += node_quick_EV_load[t]
 
-    print("EV计算结束")
+    # print("EV计算结束")
     return mic_EV_load_slow, mic_EV_load_quick, node_P_total, node_P_basic_and_EV, node_slack_load, P_basic_dict,charge_values,discharge_values
 # 慢充付费 快充付费 总负荷 无序 slack 基础负荷
 class EVLoadVisualization:

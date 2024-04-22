@@ -261,7 +261,7 @@ class Node_annual:
         })
 
         # Save to CSV
-        df_cost.to_csv(f'{dataEV_dir}/EV_cost_data.csv', index=False)  # Save without row indices
+        df_cost.to_csv(f'{dataEV_dir}/EV_cost_data_{self.node_num}.csv', index=False)  # Save without row indices
 
 
 

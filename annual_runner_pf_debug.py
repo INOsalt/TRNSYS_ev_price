@@ -77,7 +77,7 @@ def daily_powerflow(ev_p,v2g):
         # 如果不存在，则创建文件夹
         os.makedirs(output_file_path)
 
-    for day in tqdm(range(365), desc='Processing days'):
+    for day in [1]: #tqdm(range(365), desc='Processing days'):
         # try:
         start_row = day * 48
         end_row = (day + 1) * 48
@@ -218,24 +218,24 @@ def daily_powerflow(ev_p,v2g):
         #     print(f'处理第 {day} 天的数据时出错：{e}')
 
     # 创建DataFrame，将不同数据作为不同的列
-    annual_data = pd.DataFrame({
-        'Day': range(1, len(annual_costs) + 1),
-        'Costs': annual_costs,
-        'Loses': annual_loses,
-        'Earns': annual_earns,
-        'Imports': annual_imports,
-        'Generators': annual_gens,
-        'curtail' : annual_curtailed
-    })
+    # annual_data = pd.DataFrame({
+    #     'Day': range(1, len(annual_costs) + 1),
+    #     'Costs': annual_costs,
+    #     'Loses': annual_loses,
+    #     'Earns': annual_earns,
+    #     'Imports': annual_imports,
+    #     'Generators': annual_gens,
+    #     'curtail' : annual_curtailed
+    # })
 
-    # 保存到同一个CSV文件
-    csv_file_path = f'{output_file_path}/{ev_p}.csv'
-    # 保存DataFrame到CSV文件
-    annual_data.to_csv(csv_file_path, index=False)
-
-    print(f"数据已保存到 {csv_file_path}")
-    print(error_day)
-    # """
+    # # 保存到同一个CSV文件
+    # csv_file_path = f'{output_file_path}/{ev_p}.csv'
+    # # 保存DataFrame到CSV文件
+    # annual_data.to_csv(csv_file_path, index=False)
+    #
+    # print(f"数据已保存到 {csv_file_path}")
+    # print(error_day)
+    # # """
 
 
 for ev_p in tqdm([0.15, 0.3, 0.5, 1], desc="loop over ev_p"):

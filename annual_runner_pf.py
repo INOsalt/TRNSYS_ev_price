@@ -17,8 +17,8 @@ from Basic_cost import Basic_earn
 data1_dir = 'data_annual'
 
 #场景
-sen_type = 'OnlyPV'
-strategy_type = 'v2g'
+sen_type = 'OnlyWT'
+strategy_type = 'order'
 # 读取CSV文件
 folder_path = 'annual_' + sen_type + '/'
 p_from_grid_filename = folder_path + 'P_from_grid_kW_total.csv'

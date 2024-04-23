@@ -185,12 +185,26 @@ class OPF:
             generator_costs.append(total_cost)
 
             # 计算风光发电的理论输出和实际输出
+            # for idx, gen in self.net.gen.iterrows():  # 遍历所有发电机
+            #     if gen.get('type') == 'renewable':  # 检查发电机类型
+            #         bus_index = gen.bus  # 获取发电机对应的母线索引
+            #         bus_name = self.net.bus.loc[bus_index, 'name']  # 获取母线名称
+            #         # 从 res_gen 获取当前发电机的输出功率
+            #         renewable_output = self.net.res_gen.loc[idx, 'p_mw']
+            #         print(f"Renewable generator at bus {bus_name}: {renewable_output} MW")
+
+            # print(f"Period {period} renewable capacity data:")
+            # renewable_data = self.re_capacity_dict.get(period, [])
+            # print(renewable_data)
+
             renewable_expected = sum(p_mw / 1000.0 for _, p_mw in self.re_capacity_dict.get(period, []))
             renewable_actual = sum(
                 self.net.res_gen.loc[idx, 'p_mw'] for idx, gen in self.net.gen.iterrows() if
                 gen.get('type') == 'renewable'
             )
-            renewable_curtailed.append(renewable_expected - renewable_actual)  # 计算风光弃电
+            # print(renewable_expected * 1000)
+            # print(renewable_actual)
+            renewable_curtailed.append(renewable_expected - renewable_actual/1000)  # 计算风光弃电kW
 
         # 所有时段处理完成后，保存电压分布到单个CSV文件
         voltage_distribution_file = os.path.join(base_path, 'voltage_distribution.csv')

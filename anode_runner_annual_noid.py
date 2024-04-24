@@ -221,6 +221,9 @@ class Node_annual:
             c = self.ev_num * 12
             # 存储计算结果到CSV文件
 
+            charge_values = np.round(np.array(charge_values))
+            discharge_values = np.round(np.array(discharge_values))
+
             # 追加node_P_total和node_P_basic_and_EV到对应的文件
             append_to_csv(node_P_total, f'{data1_dir}/{self.node_num}_P_total.csv')
             append_to_csv(node_P_basic_and_EV, f'{data1_dir}/{self.node_num}_P_basic_and_EV.csv')

@@ -391,7 +391,7 @@ def calculate_arriving_vehicles(charging_distribution, leaving_vehicles):
 
 def calculate_P_basic(nodedata_dict, re_capacity_dict):
     P_basic_dict = {}
-    for hour in range(24):
+    for hour in range(48):
         load_matrix = nodedata_dict[hour]
         re_matrix = re_capacity_dict.get(hour, np.zeros_like(load_matrix))
         for node in nodes:
@@ -408,9 +408,9 @@ def calculate_P_basic(nodedata_dict, re_capacity_dict):
             net_load = load - re
 
             if node not in P_basic_dict:
-                P_basic_dict[node] = [net_load] * 2
+                P_basic_dict[node] = [net_load]
             else:
-                P_basic_dict[node].extend([net_load] * 2)
+                P_basic_dict[node].extend([net_load])
 
     return P_basic_dict
 

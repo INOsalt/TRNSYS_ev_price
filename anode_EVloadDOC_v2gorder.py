@@ -374,10 +374,9 @@ def calculate_arriving_vehicles(charging_distribution, leaving_vehicles):
 
 def calculate_P_basic(nodedata_dict, re_capacity_dict):
     P_basic_dict = {}
-    for hour in range(24):
+    for hour in range(48):
         load_matrix = nodedata_dict[hour]
         re_matrix = re_capacity_dict.get(hour, np.zeros_like(load_matrix))
-
         for node in nodes:
             node_index = np.where(load_matrix[:, 0] == node)[0][0]
             load = load_matrix[node_index, 1]
@@ -385,16 +384,16 @@ def calculate_P_basic(nodedata_dict, re_capacity_dict):
             # 对于pv和wt，检查节点是否在对应的矩阵中
             if node in re_matrix[:, 0]:
                 pv_index = np.where(re_matrix[:, 0] == node)[0][0]
-                re  = re_matrix[pv_index, 1]
+                re = re_matrix[pv_index, 1]
             else:
                 re = 0
 
             net_load = load - re
 
             if node not in P_basic_dict:
-                P_basic_dict[node] = [net_load] * 2
+                P_basic_dict[node] = [net_load]
             else:
-                P_basic_dict[node].extend([net_load] * 2)
+                P_basic_dict[node].extend([net_load])
 
     return P_basic_dict
 

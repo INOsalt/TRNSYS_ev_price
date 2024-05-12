@@ -143,7 +143,8 @@ class OPF:
         generator_costs = []  # 存储每个发电机的成本
         system_losses = []  # 存储每个步长的网损
         import_powers = []  # 存储每个步长从输电网进口的电量
-        gen_powers = []
+        gen_powers = []  # 存储每个发电
+        renewable_power = []  # 存储风光弃电量
         renewable_curtailed = []  # 存储风光弃电量
 
         # 定义文件保存路径
@@ -175,11 +176,11 @@ class OPF:
 
             # 计算网损
             loss_mw = sum(self.net.res_line.pl_mw)
-            system_losses.append(loss_mw)
+            system_losses.append(loss_mw/1000)
 
             # 计算从输电网进口的电量
             import_power = sum(self.net.res_ext_grid.p_mw)  # 直接从res_ext_grid获取外部电网注入的有功功率
-            import_powers.append(import_power)
+            import_powers.append(import_power/1000)
 
             total_cost = self.net.res_cost  # 获取所有成本的总和
             generator_costs.append(total_cost)
@@ -205,12 +206,19 @@ class OPF:
             # print(renewable_expected * 1000)
             # print(renewable_actual)
             renewable_curtailed.append(renewable_expected - renewable_actual/1000)  # 计算风光弃电kW
+            renewable_power.append(renewable_actual/1000)
+
+            thermal_actual = sum(
+                self.net.res_gen.loc[idx, 'p_mw'] for idx, gen in self.net.gen.iterrows() if
+                gen.get('type') == 'thermal'
+            )
+            gen_powers.append(thermal_actual/1000)
 
         # 所有时段处理完成后，保存电压分布到单个CSV文件
         voltage_distribution_file = os.path.join(base_path, 'voltage_distribution.csv')
         voltage_distributions.to_csv(voltage_distribution_file, index=False)
 
-        return generator_costs, system_losses, import_powers, gen_powers, renewable_curtailed
+        return generator_costs, system_losses, import_powers, gen_powers, renewable_curtailed,renewable_power
 
     # def calculate_generator_costs(self):
     #     gen_costs = []

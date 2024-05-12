@@ -1,16 +1,30 @@
-import pandapower as pp
+import numpy as np
+import matplotlib.pyplot as plt
 
-# 创建一个空的pandapower网络
-net = pp.create_empty_network()
+# Coefficients
+k1 = -2.685e-11
+k2 = 1.539e-07
+k3 = -0.0003261
+k4 = 1
 
-# 列出所有线路的标准类型
-std_types = pp.available_std_types(net, element='line')
-print("Available standard types for lines:\n", std_types)
+# Define the cubic function
+def cubic_function(x):
+    return k1*x**3 + k2*x**2 + k3*x + k4
 
-# 假设你对某个特定的标准类型感兴趣，比如 "NAYY 4x50 SE"（这只是一个例子，可能并不在标准库中）
-# 你可以查看这个类型的参数，如果它在标准类型库中的话
-# std_type_name = "NAYY 4x50 SE"  # 替换成实际可用的标准类型名称
-# if std_type_name in std_types['line'].keys():
-#     print("Parameters for", std_type_name, ":\n", pp.get_std_type(net, std_type_name, element='line'))
-# else:
-#     print(std_type_name, "is not an available standard type.")
+# Generate x values
+x_values = np.linspace(-500000, 500000, 400)  # Adjust the range and density as needed
+
+# Compute y values
+y_values = cubic_function(x_values)
+
+# Plotting the function
+plt.figure(figsize=(10, 6))
+plt.plot(x_values, y_values, label='Cubic Function')
+plt.title('Graph of the Cubic Function')
+plt.xlabel('x')
+plt.ylabel('f(x)')
+plt.grid(True)
+plt.axhline(0, color='black',linewidth=0.5)
+plt.axvline(0, color='black',linewidth=0.5)
+plt.legend()
+plt.show()

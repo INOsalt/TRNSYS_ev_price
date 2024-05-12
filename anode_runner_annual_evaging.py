@@ -29,10 +29,10 @@ v2g = 0
 daily_average = 24.4 #单程平均出行距离 12.2 公里
 charging_delta = 0.11 #1/(70*0.6/0.188/24.4) 不要改这个
 
-# 老化数据储存
-aging_path = "vehicle_cycles/onlyWT_v2g"
+# 老化数据储存c
+aging_path = "vehicle_cycles/onlyLOAD_v2g"
 # EV曲线储存
-ev_power_path = 'annual_EV_onlyWT_v2g/'
+ev_power_path = 'annual_EV_onlyLOAD_v2g/'
 
 def append_to_csv(data, filename):
     df = pd.DataFrame(data).transpose()  # 将向量转换为DataFrame的一行
@@ -167,8 +167,8 @@ class Node_annual:
         error_day = []
         ev_dir = ev_power_path + f'{self.ev_p}'
         # CSV文件的路径
-        ev_file_path1 = f"{ev_dir}/{node_num}_charge_values.csv"
-        ev_file_path2 = f"{ev_dir}/{node_num}_discharge_values.csv"
+        ev_file_path1 = f"{ev_dir}/{self.node_num}_charge_values.csv"
+        ev_file_path2 = f"{ev_dir}/{self.node_num}_discharge_values.csv"
         vehicle_cycles_info = {1: 0, 0.8: 0, 0.6: 0, 0.4: 0, 0.3: 0, 0.2: 0, 0.1: 0}
         for day in range(365):
             #取出车的编号
@@ -388,10 +388,10 @@ class Node_annual:
 # #                   312, 313, 314, 315, 316, 317, 318, 401, 402, 403, 404, 405, 407]:
 # # for node_num in [204,209,302,304,307,317]:
 # ev_p = 0.15
-for ev_p in tqdm([0.15, 0.3, 0.5, 1], desc="Outer loop over ev_p"):
-    for node_num in tqdm(start_points, desc="Inner loop over nodes", leave=False):
-        sim = Node_annual(node_num, ev_p)
-        sim.year_sim()
+# for ev_p in tqdm([0.3, 0.5, 1], desc="Outer loop over ev_p"):
+#     for node_num in tqdm(start_points, desc="Inner loop over nodes", leave=False):
+#         sim = Node_annual(node_num, ev_p)
+#         sim.year_sim()
 # ev_p = 1
 # for node_num in tqdm([202, 203, 204, 205, 206, 207, 208, 209, 301, 302,
 #                       303, 304, 305, 306, 307, 308, 309, 310, 311, 312,
@@ -401,8 +401,9 @@ for ev_p in tqdm([0.15, 0.3, 0.5, 1], desc="Outer loop over ev_p"):
 #     sim.year_sim()
 
 
+ev_p = 0.3
 
-# sim = Node_annual(202)
-# sim.year_sim()
-# [202,205,303,307,311,405,407]
+sim = Node_annual(201, ev_p)
+sim.year_sim()
+
 

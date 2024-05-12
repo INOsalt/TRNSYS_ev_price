@@ -13,22 +13,7 @@ from Basic_cost import Basic_earn
 # EV_penetration_values = [800 * x for x in [0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1]] #
 # v2g_ratio_values = [0, 0.1, 0.3, 0.5, 0.7, 0.9] #
 
-
-data1_dir = 'data_annual'
-
 #场景
-sen_type = 'OnlyPV'
-strategy_type = 'v2g'
-# 读取CSV文件
-folder_path = 'annual_' + sen_type + '/'
-p_from_grid_filename = folder_path + 'P_from_grid_kW_total.csv'
-reactive_power_filename = folder_path + 'reactive_power_total.csv'
-p_to_grid_filename = folder_path + 'P_to_grid_kW_total.csv'
-
-p_from_grid_df = pd.read_csv(p_from_grid_filename, dtype={'my_column': float})
-reactive_power_df = pd.read_csv(reactive_power_filename, dtype={'my_column': float})
-p_to_grid_df = pd.read_csv(p_to_grid_filename, dtype={'my_column': float})
-
 
 def save_to_csv(data, output_file_path, filename):
     filepath = os.path.join(output_file_path, f'{filename}.csv')
@@ -49,7 +34,8 @@ def save_to_csv(data, output_file_path, filename):
     # 保存DataFrame到CSV
     df.to_csv(filepath, index=False)
 
-def daily_powerflow(ev_p,v2g):
+def daily_powerflow(ev_p,v2g,sen_type,strategy_type,p_from_grid_df,reactive_power_df,p_to_grid_df):
+
     # 读取CSV文件
     ev_opt_file_path = f'powerflow_{sen_type}_{strategy_type}/daily_total_{sen_type}_{strategy_type}_{ev_p}.csv'
     daily_EV_OPT = pd.read_csv(ev_opt_file_path)
@@ -69,6 +55,7 @@ def daily_powerflow(ev_p,v2g):
     annual_imports = []
     annual_gens = []
     annual_curtailed = []
+    annual_renewable_power = []
     error_day = []
 
     # 创建文件夹路径
@@ -160,7 +147,7 @@ def daily_powerflow(ev_p,v2g):
 
             try:
                 # 调用外部模块的函数
-                generator_costs, system_losses, import_powers, gen_powers, renewable_curtailed = opf.run_ts_opf(ev_p, v2g, output_file_path)
+                generator_costs, system_losses, import_powers, gen_powers, renewable_curtailed,renewable_power = opf.run_ts_opf(ev_p, v2g, output_file_path)
             except Exception as e:
                 # 处理异常
                 print(f"{day}天调用 opf.run_ts_opf 时出错：{e}")
@@ -170,6 +157,7 @@ def daily_powerflow(ev_p,v2g):
                 import_powers = []
                 gen_powers = []
                 renewable_curtailed = []
+                renewable_power = []
                 error_day.append(day)
 
             # 将 generator_costs 转换为 DataFrame
@@ -187,6 +175,7 @@ def daily_powerflow(ev_p,v2g):
             lose_daily = np.sum(np.array(system_losses))
             total_import_daily = np.sum(np.array(import_powers))
             total_gen_daily = np.sum(np.array(gen_powers))
+            total_renewable_power = np.sum(np.array(renewable_power))
             total_renewable_curtailed = np.sum(np.array(renewable_curtailed))
 
             # 定义一个辅助函数用于将数据保存到CSV文件
@@ -202,6 +191,7 @@ def daily_powerflow(ev_p,v2g):
             annual_imports.append(total_import_daily)
             annual_gens.append(total_gen_daily)
             annual_curtailed.append(total_renewable_curtailed)
+            annual_renewable_power.append(total_renewable_power)
             # print(f'第{day + 1}天的成本: {cost_daily}')
             # print(f'第{day + 1}天的网损: {lose_daily}')
             # print(f'第{day + 1}天的收入: {basic_earn_daily}')
@@ -214,6 +204,7 @@ def daily_powerflow(ev_p,v2g):
             annual_imports.append(0)
             annual_gens.append(0)
             annual_curtailed.append(0)
+            annual_renewable_power.append(0)
             error_day.append(day)
             print(f'处理第 {day} 天的数据时出错：{e}')
 
@@ -225,7 +216,8 @@ def daily_powerflow(ev_p,v2g):
         'Earns': annual_earns,
         'Imports': annual_imports,
         'Generators': annual_gens,
-        'curtail' : annual_curtailed
+        'curtail' : annual_curtailed,
+        'renewable_power' : annual_renewable_power
     })
 
     # 保存到同一个CSV文件
@@ -238,35 +230,25 @@ def daily_powerflow(ev_p,v2g):
     # """
 
 
-for ev_p in tqdm([0.15, 0.3, 0.5, 1], desc="loop over ev_p"):
-    v2g = 0
-    daily_powerflow(ev_p, v2g)
-    #
-    # # 创建空的DataFrame，用于存储结果
-    # cost_df = pd.DataFrame(index=v2g_ratio_values, columns=EV_penetration_values)
-    # lose_df = pd.DataFrame(index=v2g_ratio_values, columns=EV_penetration_values)
-    # earn_df = pd.DataFrame(index=v2g_ratio_values, columns=EV_penetration_values)
-    #
-    # # 创建存储CSV的目录
-    # data1_dir = 'data2'
-    # os.makedirs(data1_dir, exist_ok=True)
-    #
-    # # 循环更新变量并调用main函数，填充DataFrame，并显示进度
-    # total_iterations = len(EV_penetration_values) * len(v2g_ratio_values)
-    # with tqdm(total=total_iterations, desc="Processing", unit="iteration") as pbar:
-    #     for ev_p in EV_penetration_values:
-    #         for v2g in v2g_ratio_values:
-    #             cost, lose, total_earn = main(ev_p, v2g, data1_dir)
-    #             cost_df.at[v2g, ev_p] = cost
-    #             lose_df.at[v2g, ev_p] = lose
-    #             earn_df.at[v2g, ev_p] = total_earn
-    #
-    #             # 更新进度条
-    #             pbar.update(1)
-    #
-    # # 保存CSV文件
-    # cost_df.to_csv(os.path.join(data1_dir, 'cost.csv'))
-    # lose_df.to_csv(os.path.join(data1_dir, 'lose.csv'))
-    # earn_df.to_csv(os.path.join(data1_dir, 'earn.csv'))
+def main(sen_type,strategy_type):
 
+    # 读取CSV文件
+    folder_path = 'annual_' + sen_type + '/'
+    p_from_grid_filename = folder_path + 'P_from_grid_kW_total.csv'
+    reactive_power_filename = folder_path + 'reactive_power_total.csv'
+    p_to_grid_filename = folder_path + 'P_to_grid_kW_total.csv'
 
+    p_from_grid_df = pd.read_csv(p_from_grid_filename, dtype={'my_column': float})
+    reactive_power_df = pd.read_csv(reactive_power_filename, dtype={'my_column': float})
+    p_to_grid_df = pd.read_csv(p_to_grid_filename, dtype={'my_column': float})
+
+    for ev_p in tqdm([0.15, 0.3, 0.5, 1], desc="loop over ev_p"):
+        v2g = 0
+        daily_powerflow(ev_p, v2g, sen_type, strategy_type,p_from_grid_df,reactive_power_df,p_to_grid_df)
+
+sen_types = ['OnlyPV','OnlyLOAD','OnlyWT']
+strategy_types = ['v2g','order']
+for sen_type in sen_types:
+    for strategy_type in strategy_types:
+          print(sen_type,strategy_type)
+          main(sen_type,strategy_type)

@@ -1,7 +1,7 @@
 import os
 from tqdm import tqdm
 from gridinfo import nodes, initial_EV, node_mapping,start_points,end_points,C_buy,C_sell,prices_real,expand_array
-from docplex.mp.model import Model
+# from docplex.mp.model import Model
 # v2g order
 from anode_EVloadDOC_v2gorder import EVload_node
 # order
@@ -26,13 +26,13 @@ charging_delta = 0.11 #1/(70*0.6/0.188/24.4)
 EV_buy_price = expand_array(np.array(prices_real))
 EV_sell_price = max(prices_real)
 
-aging_path = "vehicle_cycles/PVround_v2g"
+aging_path = "vehicle_cycles/LOAD_v2g"
 # 功率曲线储存
-power_path = 'data_annual_PVround_v2g/'
+power_path = 'data_annual_LOAD_v2g/'
 # EV信息储存
-EV_path = 'annual_EV_PVround_order/'
+EV_path = 'annual_EV_LOAD_v2g/'
 # 读取CSV文件
-folder_path = 'annual_PV_round/'
+folder_path = 'annual_onlyLOAD/'
 p_from_grid_filename = folder_path + 'P_from_grid_kW_total.csv'
 reactive_power_filename = folder_path + 'reactive_power_total.csv'
 p_to_grid_filename = folder_path + 'P_to_grid_kW_total.csv'
@@ -265,21 +265,22 @@ class Node_annual:
 
 
 
-for ev_p in tqdm([0.15, 0.3, 0.5, 1], desc="Outer loop over ev_p"):
-    for node_num in tqdm(start_points, desc="Inner loop over nodes", leave=False):
-        sim = Node_annual(node_num, ev_p)
-        sim.year_sim()
-# ev_p = 1
-# for node_num in tqdm([202, 203, 204, 205, 206, 207, 208, 209, 301, 302,
-#                       303, 304, 305, 306, 307, 308, 309, 310, 311, 312,
-#                       313, 314, 315, 316, 317, 318, 401, 402, 403, 404,
-#                       405, 407], desc="Inner loop over nodes", leave=False):
-#     sim = Node_annual(node_num, ev_p)
-#     sim.year_sim()
+# for ev_p in tqdm([0.5, 1], desc="Outer loop over ev_p"): #0.15, 0.3,
+#     for node_num in tqdm(start_points, desc="Inner loop over nodes", leave=False):
+#         sim = Node_annual(node_num, ev_p)
+#         sim.year_sim()
+ev_p = 0.5
+for node_num in tqdm([311, 312, 313, 314, 315, 316, 317,
+                      318, 401, 402, 403, 404, 405, 407], desc="Inner loop over nodes", leave=False):
+    sim = Node_annual(node_num, ev_p)
+    sim.year_sim()
 
 
 
 # sim = Node_annual(202)
 # sim.year_sim()
-# [202,205,303,307,311,405,407]
+# 202, 203, 204, 205, 206, 207, 208, 209, 301, 302,
+#                       303, 304, 305, 306, 307, 308, 309, 310, 311, 312,
+#                       313, 314, 315, 316, 317, 318, 401, 402, 403, 404,
+#                       405, 407]
 

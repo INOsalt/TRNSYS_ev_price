@@ -3,9 +3,9 @@ from tqdm import tqdm
 from gridinfo import nodes, initial_EV, node_mapping,start_points,end_points,C_buy,C_sell,prices_real,expand_array
 from docplex.mp.model import Model
 # v2g order
-# from anode_EVloadDOC_v2gorder import EVload_node
+from anode_EVloadDOC_v2gorder import EVload_node
 # order
-from anode_EVloadDOC_order import EVload_node
+# from anode_EVloadDOC_order import EVload_node
 # import importlib
 import pandas as pd
 import numpy as np
@@ -26,11 +26,11 @@ charging_delta = 0.11 #1/(70*0.6/0.188/24.4)
 EV_buy_price = expand_array(np.array(prices_real))
 EV_sell_price = max(prices_real)
 
-aging_path = "vehicle_cycles/onlyWT_order"
+aging_path = "vehicle_cycles/onlyWT_v2g"
 # 功率曲线储存
-power_path = 'data_annual_onlyWT_order/'
+power_path = 'data_annual_onlyWT_v2g/'
 # EV信息储存
-EV_path = 'annual_EV_onlyWT_order/'
+EV_path = 'annual_EV_onlyWT_v2g/'
 # 读取CSV文件
 folder_path = 'annual_onlyWT/'
 p_from_grid_filename = folder_path + 'P_from_grid_kW_total.csv'
